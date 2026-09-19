@@ -157,6 +157,13 @@ state. Monitor readiness, session faults, queue saturation, and command latency.
 
 ## Validation
 
+[GitHub Actions](.github/workflows/ci.yml) runs on pushes, pull requests, and
+manual dispatch in this standalone repository. It checks Linux and Windows code
+with the pinned linter, runs tests with the race detector, and cross-compiles the
+Windows service and native tests. Go is selected from `go.mod`; the linter version
+comes from the Makefile. CI requires no DLL or broker credentials: native DLL
+and live bridge smoke tests remain opt-in runtime checks.
+
 Linting uses golangci-lint v2.5.0 and the repository's `.golangci.yaml`:
 
 ```sh
