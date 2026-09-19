@@ -1,0 +1,17 @@
+# Keep source and generated protobuf reproducible across Linux and Windows.
+* text=auto
+*.go text eol=lf
+*.proto text eol=lf
+*.md text eol=lf
+*.yaml text eol=lf
+*.yml text eol=lf
+*.sh text eol=lf
+go.mod text eol=lf
+go.sum text eol=lf
+Makefile text eol=lf
+Dockerfile text eol=lf
+.gitignore text eol=lf
+.gitattributes text eol=lf
+.dockerignore text eol=lf
+*.dll binary
+*.exe binary

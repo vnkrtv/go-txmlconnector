@@ -1,0 +1,42 @@
+# golangci-lint v2.5.0, built with Go >= the module toolchain.
+version: "2"
+
+run:
+  concurrency: 4
+
+linters:
+  default: none
+  enable:
+    - errcheck
+    - errorlint
+    - goconst
+    - govet
+    - ineffassign
+    - misspell
+    - nolintlint
+    - staticcheck
+    - unconvert
+  settings:
+    errorlint:
+      errorf: true
+      asserts: true
+      comparison: true
+    govet:
+      enable:
+        - shadow
+    misspell:
+      locale: US
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  exclusions:
+    generated: lax

@@ -1,0 +1,16 @@
+syntax = "proto3";
+
+// Canonical wire schema. Generate local Go bindings with make generate.
+// Keep the protobuf package and field numbers compatible with existing clients.
+package transaqConnector;
+option go_package = "go-txmlconnector/proto";
+
+message DataRequest {}
+message DataResponse { string message = 1; }
+message SendCommandRequest { string message = 1; }
+message SendCommandResponse { string message = 1; }
+
+service ConnectService {
+  rpc FetchResponseData(DataRequest) returns (stream DataResponse);
+  rpc SendCommand(SendCommandRequest) returns (SendCommandResponse);
+}

@@ -1,0 +1,25 @@
+/bin/
+/logs/
+/.wine/
+
+# Native libraries are supplied separately; builds and crash dumps are local.
+*.dll
+*.exe
+*.exe~
+*.test
+*.mdmp
+*.dmp
+/txmlconnector
+/coverage.out
+/coverage.html
+*.log
+
+# Local configuration and workspace files.
+.env
+.env.*
+!.env.example
+go.work
+go.work.sum
+.idea/
+.vscode/
+.DS_Store
