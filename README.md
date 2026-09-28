@@ -41,6 +41,8 @@ limits; use process/container memory limits. Shutdown has a fixed time budget.
 
 See [architecture](docs/architecture.md) for ownership, execution, and memory
 management, and [operations](docs/operations.md) for diagnostics and recovery.
+The [implementation comparison](docs/comparison.md) covers differences from the
+project that inspired this bridge and the limits of current performance evidence.
 
 ## Build and run
 
@@ -103,7 +105,7 @@ Configuration uses CLI flags. Broker credentials arrive in the client's XML
 
 The [schema](api/connect.proto) preserves protobuf package `transaqConnector`,
 service `ConnectService`, and field numbers. Local Go bindings are in
-`go-txmlconnector/proto`.
+`github.com/vnkrtv/go-txmlconnector/proto`.
 
 - `SendCommand`: accepts XML in `message` and returns the DLL's XML unchanged
   when the response is a valid result.

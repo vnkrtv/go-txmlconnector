@@ -29,7 +29,7 @@ native-test-build:
 	CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go test -c -o bin/native.test.exe ./internal/native
 
 generate:
-	protoc --go_out=. --go_opt=module=go-txmlconnector --go-grpc_out=. --go-grpc_opt=module=go-txmlconnector api/connect.proto
+	protoc --go_out=. --go_opt=module=github.com/vnkrtv/go-txmlconnector --go-grpc_out=. --go-grpc_opt=module=github.com/vnkrtv/go-txmlconnector api/connect.proto
 
 tools:
 	go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.36.6

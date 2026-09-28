@@ -15,9 +15,9 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/collectors"
 
-	"go-txmlconnector/internal/bridge"
-	"go-txmlconnector/internal/config"
-	"go-txmlconnector/internal/native"
+	"github.com/vnkrtv/go-txmlconnector/internal/bridge"
+	"github.com/vnkrtv/go-txmlconnector/internal/config"
+	"github.com/vnkrtv/go-txmlconnector/internal/native"
 )
 
 var version = "development"

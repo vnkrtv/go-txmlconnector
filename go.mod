@@ -1,4 +1,4 @@
-module go-txmlconnector
+module github.com/vnkrtv/go-txmlconnector
 
 go 1.24.0
 

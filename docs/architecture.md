@@ -142,10 +142,13 @@ The [README](../README.md#grpc-and-errors) lists status codes and structured
 
 The local schema preserves protobuf package `transaqConnector`, service
 `ConnectService`, method names, and field numbers. Both methods transport XML
-in the `message` field. Generated bindings live in `go-txmlconnector/proto` and
+in the `message` field. Generated bindings live in `github.com/vnkrtv/go-txmlconnector/proto` and
 are checked in; no upstream source package is required.
 
 Wire compatibility does not supply missing client behavior. Clients must handle
 callback errors, stream loss, command rejections, and recovery explicitly.
 
 See [operations](operations.md) for deployment, diagnostics, and recovery.
+
+See the [implementation comparison](comparison.md) for baseline differences and
+performance tradeoffs.

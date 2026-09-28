@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	pb "go-txmlconnector/proto"
+	pb "github.com/vnkrtv/go-txmlconnector/proto"
 
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"

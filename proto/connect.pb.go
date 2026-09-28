@@ -206,7 +206,7 @@ const file_api_connect_proto_rawDesc = "" +
 	"\amessage\x18\x01 \x01(\tR\amessage2\xc2\x01\n" +
 	"\x0eConnectService\x12T\n" +
 	"\x11FetchResponseData\x12\x1d.transaqConnector.DataRequest\x1a\x1e.transaqConnector.DataResponse0\x01\x12Z\n" +
-	"\vSendCommand\x12$.transaqConnector.SendCommandRequest\x1a%.transaqConnector.SendCommandResponseB\x18Z\x16go-txmlconnector/protob\x06proto3"
+	"\vSendCommand\x12$.transaqConnector.SendCommandRequest\x1a%.transaqConnector.SendCommandResponseB*Z(github.com/vnkrtv/go-txmlconnector/protob\x06proto3"
 
 var (
 	file_api_connect_proto_rawDescOnce sync.Once

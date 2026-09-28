@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"go-txmlconnector/internal/bridge"
+	"github.com/vnkrtv/go-txmlconnector/internal/bridge"
 )
 
 type Config struct {

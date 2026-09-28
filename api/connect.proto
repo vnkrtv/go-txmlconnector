@@ -3,7 +3,7 @@ syntax = "proto3";
 // Canonical wire schema. Generate local Go bindings with make generate.
 // Keep the protobuf package and field numbers compatible with existing clients.
 package transaqConnector;
-option go_package = "go-txmlconnector/proto";
+option go_package = "github.com/vnkrtv/go-txmlconnector/proto";
 
 message DataRequest {}
 message DataResponse { string message = 1; }

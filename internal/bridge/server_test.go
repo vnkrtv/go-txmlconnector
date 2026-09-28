@@ -15,7 +15,7 @@ import (
 	"testing"
 	"time"
 
-	pb "go-txmlconnector/proto"
+	pb "github.com/vnkrtv/go-txmlconnector/proto"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/require"
