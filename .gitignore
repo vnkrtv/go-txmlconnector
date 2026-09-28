@@ -2,8 +2,9 @@
 /logs/
 /.wine/
 
-# Native libraries are supplied separately; builds and crash dumps are local.
+# Local binaries and crash dumps. The pinned Transaq DLL is tracked in Git.
 *.dll
+!txmlconnector64-6.43.2.24.0.dll
 *.exe
 *.exe~
 *.test

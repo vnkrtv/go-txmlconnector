@@ -55,31 +55,36 @@ make build VERSION=local
 ```
 
 The output is `bin/txmlconnector.exe`. Portable tests run on Linux; loading the
-DLL requires Windows amd64 or a compatible Wine runtime. Supply the DLL separately.
+DLL requires Windows amd64 or a compatible Wine runtime. The pinned library
+`txmlconnector64-6.43.2.24.0.dll` is tracked in this repository root.
 
 On Windows (PowerShell):
 
 ```powershell
-.\bin\txmlconnector.exe -dll C:\txml\txmlconnector64-6.43.2.24.0.dll -native-log-dir C:\txml\logs
+.\bin\txmlconnector.exe -dll .\txmlconnector64-6.43.2.24.0.dll -native-log-dir .\logs
 ```
 
 ### Docker
 
-Place `txmlconnector64-6.43.2.24.0.dll` in the repository root (ignored by Git), then:
+The Dockerfile copies `txmlconnector64-6.43.2.24.0.dll` from the repository root
+into the image. From the repository root:
 
 ```sh
+make docker-build                         # go-txmlconnector:local
+make docker-build IMAGE=registry.vm.vnkrtv.ru/ultima/go-txmlconnector VERSION=latest
 docker compose up --build
 ```
 
-The image builds local sources and runs the Windows executable under Wine 10.
-Compose exposes gRPC on `127.0.0.1:50052` and HTTP on `127.0.0.1:9092`, with no
-automatic restart. For a standalone build or a different DLL in the build context:
+Or:
 
 ```sh
 docker build --platform linux/amd64 \
   --build-arg DLL_SOURCE=txmlconnector64-6.43.2.24.0.dll \
   --build-arg VERSION=local -t go-txmlconnector:local .
 ```
+
+The image runs the Windows executable under Wine. Compose exposes gRPC on
+`127.0.0.1:50052` and HTTP on `127.0.0.1:9092`, with no automatic restart.
 
 ### Configuration
 

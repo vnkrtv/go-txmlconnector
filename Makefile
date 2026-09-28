@@ -1,8 +1,14 @@
 VERSION ?= development
 GOLANGCI ?= golangci-lint
 GOLANGCI_VERSION := v2.5.0
+DLL ?= txmlconnector64-6.43.2.24.0.dll
+IMAGE ?= go-txmlconnector:local
+REGISTRY_IMAGE ?= registry.vm.vnkrtv.ru/ultima/go-txmlconnector
 
-.PHONY: test fmt lint lint-windows lint-install build native-test-build generate tools
+.PHONY: test fmt lint lint-windows lint-install build native-test-build generate tools docker-build docker-push ensure-dll
+
+ensure-dll:
+	@test -f "$(DLL)" || { echo "missing $(DLL) in repository root"; exit 1; }
 
 test:
 	go test -race ./...
@@ -34,3 +40,13 @@ generate:
 tools:
 	go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.36.6
 	go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.5.1
+
+docker-build: ensure-dll
+	docker build --platform linux/amd64 \
+		--build-arg DLL_SOURCE=$(DLL) \
+		--build-arg VERSION=$(VERSION) \
+		-t $(IMAGE) .
+
+docker-push: docker-build
+	docker tag $(IMAGE) $(REGISTRY_IMAGE):$(VERSION)
+	docker push $(REGISTRY_IMAGE):$(VERSION)
