@@ -40,17 +40,15 @@ gRPC connection to invoke an RPC becomes the owner. Commands and the sole
 callback stream must share that connection. Both RPCs reject other connections
 with `AlreadyExists` and reason `CLIENT_ALREADY_ATTACHED`.
 
-Ownership lasts while the client transport is connected. When it closes, the
-bridge enters `resetting`, waits for its RPC handlers to exit, and serializes
-native cleanup behind any executing command. `UnInitialize` ends the old broker
-session and joins callbacks; the bridge then discards buffered events and calls
-`Initialize` again. Only after cleanup succeeds can another connection claim the
-service. RPCs during cleanup return `SESSION_NOT_READY`.
-
-Closing only the callback stream releases its subscription without disconnecting
-the broker or releasing the transport owner. The same owner can reopen the stream;
-other connections are still rejected. Queued events remain available, subject to
-the normal buffer limits. Events already sent have no replay guarantee.
+Ownership lasts while the client transport is connected *and* its callback
+stream is alive. Closing the HTTP/2 connection (`ConnEnd`) or losing the
+callback stream (cancel, send failure, container restart) both release the
+owner: the bridge enters `resetting`, waits for its RPC handlers to exit, and
+serializes native cleanup behind any executing command. `UnInitialize` ends the
+old broker session and joins callbacks; the bridge then discards buffered events
+and calls `Initialize` again. Only after cleanup succeeds can another connection
+claim the service. RPCs during cleanup return `SESSION_NOT_READY`. The previous
+transport stays marked closed and cannot reclaim the session.
 
 Reconnecting creates a fresh broker session: the client must send `connect` and
 restore its state. Unknown command outcomes and cleanup failures remain terminal

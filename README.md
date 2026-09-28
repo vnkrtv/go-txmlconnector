@@ -31,9 +31,10 @@ One gRPC client connection
   Other connections receive `AlreadyExists` (`CLIENT_ALREADY_ATTACHED`).
 - **Lifecycle**: a disconnected owner triggers `ready → resetting → ready`.
   The executor closes and reinitializes the DLL, discards the old event backlog,
-  and accepts the next client. Closing only the callback stream allows the same
-  owner to subscribe again. Event overflow and unknown command outcomes still
-  fault the session and require reconciliation and a process restart.
+  and accepts the next client. Losing the callback stream (cancel, send
+  failure, abrupt disconnect) is treated the same as tearing down the transport.
+  Event overflow and unknown command outcomes still fault the session and
+  require reconciliation and a process restart.
 
 A DLL call cannot be canceled safely. Deadlines stop waiting, but an in-flight
 native call may continue. Native memory awaiting release is outside the Go queue

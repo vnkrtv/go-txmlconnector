@@ -45,18 +45,31 @@ func (s *Server) HandleConn(ctx context.Context, event stats.ConnStats) {
 	if _, ended := event.(*stats.ConnEnd); !ended {
 		return
 	}
-	connection, ok := ctx.Value(connectionKey{}).(*connectionState)
-	if !ok {
+	s.releaseOwner(connectionFrom(ctx))
+}
+
+func connectionFrom(ctx context.Context) *connectionState {
+	connection, _ := ctx.Value(connectionKey{}).(*connectionState)
+	return connection
+}
+
+// releaseOwner treats the transport (or its callback stream) as gone: the DLL
+// session is reserved until in-flight RPCs finish, then reset for the next client.
+func (s *Server) releaseOwner(connection *connectionState) {
+	if connection == nil {
 		return
 	}
 	connection.closed.Store(true)
 	s.session.mu.Lock()
-	if s.session.owner == connection && s.session.state == stateReady {
+	defer s.session.mu.Unlock()
+	if s.session.owner != connection {
+		return
+	}
+	if s.session.state == stateReady {
 		s.session.state = stateResetting
 		s.session.metrics.ready.Set(0)
 	}
 	s.session.scheduleResetLocked()
-	s.session.mu.Unlock()
 }
 
 func (s *Server) claim(ctx context.Context) error {
@@ -130,6 +143,7 @@ func (s *Server) FetchResponseData(_ *pb.DataRequest, stream pb.ConnectService_F
 		session.mu.Unlock()
 	}()
 	if err := stream.SendHeader(metadata.Pairs("txml-stream", "attached")); err != nil {
+		s.releaseOwner(connectionFrom(stream.Context()))
 		return fmt.Errorf("%s: %w", op, err)
 	}
 	lastConnected := ""
@@ -140,6 +154,9 @@ func (s *Server) FetchResponseData(_ *pb.DataRequest, stream pb.ConnectService_F
 		case <-session.fault:
 			return rpcError(codes.FailedPrecondition, "SESSION_FAULTED", op+": session faulted; reconcile before restarting")
 		case <-stream.Context().Done():
+			// Abrupt stream loss (client crash, container restart, cancel) is a
+			// full disconnect: free the DLL for the next owner after cleanup.
+			s.releaseOwner(connectionFrom(stream.Context()))
 			return status.FromContextError(stream.Context().Err()).Err()
 		case message := <-session.events:
 			session.mu.Lock()
@@ -158,6 +175,7 @@ func (s *Server) FetchResponseData(_ *pb.DataRequest, stream pb.ConnectService_F
 				session.metrics.callbackErrors.Inc()
 			}
 			if err := stream.Send(&pb.DataResponse{Message: message}); err != nil {
+				s.releaseOwner(connectionFrom(stream.Context()))
 				return fmt.Errorf("%s: %w", op, err)
 			}
 			session.metrics.delivered.Inc()

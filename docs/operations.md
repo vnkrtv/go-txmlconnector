@@ -48,8 +48,9 @@ restrict access, retention, and collection accordingly.
 Normal client disconnection does not require a container restart. Readiness is
 briefly unavailable while the bridge closes and reinitializes the native session;
 then a new client can connect. Expect `client disconnected; resetting connector`
-and `connector ready for next client` in the logs. Closing only the callback stream
-allows the same client connection to subscribe again.
+and `connector ready for next client` in the logs. Losing the callback stream
+(cancel, send failure, abrupt disconnect) is treated as a full disconnect: the
+bridge resets the native session and only a new transport can claim ownership.
 
 A faulted session cannot resume. Stop new trading actions and preserve logs and
 metrics. Reconcile active orders, trades, and unknown command outcomes with the

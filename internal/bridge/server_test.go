@@ -212,14 +212,25 @@ func TestCommandQueueIsBounded(t *testing.T) {
 func TestStreamEventsAndSingleConsumer(t *testing.T) {
 	c := &testConnector{send: func(string) (string, error) { return acceptedResultXML, nil }}
 	s, _ := setup(t, c, DefaultConfig())
-	cl := client(t, s)
+	listener := bufconn.Listen(1 << 20)
+	server := NewGRPCServer(s)
+	go func() { _ = server.Serve(listener) }()
+	t.Cleanup(func() { server.Stop(); _ = listener.Close() })
+	dial := func() pb.ConnectServiceClient {
+		conn, err := grpc.NewClient("passthrough:///test", grpc.WithTransportCredentials(insecure.NewCredentials()),
+			grpc.WithContextDialer(func(context.Context, string) (net.Conn, error) { return listener.Dial() }))
+		require.NoError(t, err)
+		t.Cleanup(func() { _ = conn.Close() })
+		return pb.NewConnectServiceClient(conn)
+	}
+	owner := dial()
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
-	stream, err := cl.FetchResponseData(ctx, &pb.DataRequest{})
+	stream, err := owner.FetchResponseData(ctx, &pb.DataRequest{})
 	require.NoError(t, err)
 	_, err = stream.Header()
 	require.NoError(t, err)
-	second, err := cl.FetchResponseData(ctx, &pb.DataRequest{})
+	second, err := owner.FetchResponseData(ctx, &pb.DataRequest{})
 	require.NoError(t, err)
 	_, err = second.Recv()
 	require.Equal(t, codes.AlreadyExists, status.Code(err))
@@ -230,9 +241,21 @@ func TestStreamEventsAndSingleConsumer(t *testing.T) {
 		require.Equal(t, event, response.Message)
 	}
 	cancel()
-	require.Eventually(t, func() bool { s.mu.Lock(); defer s.mu.Unlock(); return !s.subscribed }, time.Second, time.Millisecond)
-	require.Equal(t, stateReady, s.Snapshot().State)
-	reopened, err := cl.FetchResponseData(context.Background(), &pb.DataRequest{})
+	// Stream cancel is a full disconnect: native cleanup runs, then a new
+	// transport can claim. The old connection stays marked closed.
+	require.Eventually(t, func() bool {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		return !s.subscribed && s.state == stateReady && s.owner == nil
+	}, time.Second, time.Millisecond)
+	require.True(t, c.closed.Load(), "stream end must reset the native session")
+	require.Zero(t, c.calls.Load(), "stream end must not send an implicit disconnect command")
+	stale, err := owner.FetchResponseData(context.Background(), &pb.DataRequest{})
+	require.NoError(t, err)
+	_, err = stale.Recv()
+	require.Equal(t, "SESSION_NOT_READY", errorReason(err))
+	successor := dial()
+	reopened, err := successor.FetchResponseData(context.Background(), &pb.DataRequest{})
 	require.NoError(t, err)
 	_, err = reopened.Header()
 	require.NoError(t, err)
@@ -240,7 +263,6 @@ func TestStreamEventsAndSingleConsumer(t *testing.T) {
 	message, err := reopened.Recv()
 	require.NoError(t, err)
 	require.Equal(t, `<orders/>`, message.Message)
-	require.Zero(t, c.calls.Load(), "stream closure must not issue implicit disconnect")
 }
 
 func TestOverflowPoisonsSessionAndReadiness(t *testing.T) {
