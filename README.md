@@ -55,19 +55,20 @@ make build VERSION=local
 ```
 
 The output is `bin/txmlconnector.exe`. Portable tests run on Linux; loading the
-DLL requires Windows amd64 or a compatible Wine runtime. The pinned library
-`txmlconnector64-6.43.2.24.0.dll` is tracked in this repository root.
+DLL requires Windows amd64 or a compatible Wine runtime. Pinned libraries live
+under `dll/` (currently `dll/txmlconnector64-6.43.2.24.0.dll`); other versions
+can be placed next to it.
 
 On Windows (PowerShell):
 
 ```powershell
-.\bin\txmlconnector.exe -dll .\txmlconnector64-6.43.2.24.0.dll -native-log-dir .\logs
+.\bin\txmlconnector.exe -dll .\dll\txmlconnector64-6.43.2.24.0.dll -native-log-dir .\logs
 ```
 
 ### Docker
 
-The Dockerfile copies `txmlconnector64-6.43.2.24.0.dll` from the repository root
-into the image. From the repository root:
+The Dockerfile copies the pinned DLL from `dll/` into the image. From the
+repository root:
 
 ```sh
 make docker-build                         # go-txmlconnector:local
@@ -79,7 +80,7 @@ Or:
 
 ```sh
 docker build --platform linux/amd64 \
-  --build-arg DLL_SOURCE=txmlconnector64-6.43.2.24.0.dll \
+  --build-arg DLL_SOURCE=dll/txmlconnector64-6.43.2.24.0.dll \
   --build-arg VERSION=local -t go-txmlconnector:local .
 ```
 
@@ -93,7 +94,7 @@ Configuration uses CLI flags. Broker credentials arrive in the client's XML
 
 | Flag | Default | Purpose |
 |---|---|---|
-| `-dll` | `txmlconnector64-6.43.2.24.0.dll` | Native library path |
+| `-dll` | `dll/txmlconnector64-6.43.2.24.0.dll` | Native library path |
 | `-native-log-dir` | `logs` | Private DLL log directory |
 | `-native-log-level` | `1` | DLL log level, 1–3 |
 | `-log-level` | `info` | JSON stdout: debug/info/warn/error |

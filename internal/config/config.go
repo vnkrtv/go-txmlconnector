@@ -27,7 +27,7 @@ func Parse(args []string) (Config, error) {
 	c := Config{Bridge: bridge.DefaultConfig()}
 	f := flag.NewFlagSet("go-txmlconnector", flag.ContinueOnError)
 	f.SetOutput(io.Discard)
-	f.StringVar(&c.DLLPath, "dll", "txmlconnector64-6.43.2.24.0.dll", "Path to pinned DLL")
+	f.StringVar(&c.DLLPath, "dll", "dll/txmlconnector64-6.43.2.24.0.dll", "Path to pinned DLL")
 	f.StringVar(&c.NativeLogPath, "native-log-dir", "logs", "Private native DLL log directory")
 	f.IntVar(&c.NativeLogLevel, "native-log-level", 1, "DLL log level (1..3)")
 	f.StringVar(&c.LogLevel, "log-level", "info", "JSON application log level")

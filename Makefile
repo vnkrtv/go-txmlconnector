@@ -1,7 +1,7 @@
 VERSION ?= development
 GOLANGCI ?= golangci-lint
 GOLANGCI_VERSION := v2.5.0
-DLL ?= txmlconnector64-6.43.2.24.0.dll
+DLL ?= dll/txmlconnector64-6.43.2.24.0.dll
 IMAGE ?= go-txmlconnector:local
 REGISTRY_IMAGE ?= registry.vm.vnkrtv.ru/ultima/go-txmlconnector
 

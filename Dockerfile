@@ -18,8 +18,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends wine wine64 ca-
     && chown -R connector:connector /var/lib/txml
 WORKDIR /opt/txml
 COPY --from=build /out/txmlconnector.exe ./txmlconnector.exe
-# Pinned Transaq DLL is tracked in the repository root (see .gitignore exception).
-ARG DLL_SOURCE=txmlconnector64-6.43.2.24.0.dll
+# Pinned Transaq DLL from dll/ (other versions can sit alongside).
+ARG DLL_SOURCE=dll/txmlconnector64-6.43.2.24.0.dll
 COPY ${DLL_SOURCE} ./txmlconnector.dll
 USER connector
 ENV WINEARCH=win64 WINEPREFIX=/var/lib/txml/wine WINEDEBUG=-all
