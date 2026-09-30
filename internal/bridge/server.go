@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net/http"
 	"sync/atomic"
+	"time"
 
 	pb "github.com/vnkrtv/go-txmlconnector/proto"
 
@@ -78,17 +79,36 @@ func (s *Server) claim(ctx context.Context) error {
 	if !ok {
 		return status.Error(codes.Internal, op+": missing transport identity")
 	}
-	s.session.mu.Lock()
-	defer s.session.mu.Unlock()
-	if connection.closed.Load() || s.session.state != stateReady {
-		return rpcError(codes.FailedPrecondition, "SESSION_NOT_READY", op+": session is not ready")
+	for {
+		s.session.mu.Lock()
+		if connection.closed.Load() {
+			s.session.mu.Unlock()
+			return rpcError(codes.FailedPrecondition, "SESSION_NOT_READY", op+": session is not ready")
+		}
+		switch s.session.state {
+		case stateReady:
+			if s.session.owner != nil && s.session.owner != connection {
+				s.session.mu.Unlock()
+				return rpcError(codes.AlreadyExists, "CLIENT_ALREADY_ATTACHED", op+": DLL session already belongs to another connection")
+			}
+			s.session.owner = connection
+			s.session.activeRPCs++
+			s.session.mu.Unlock()
+			return nil
+		case stateResetting:
+			s.session.mu.Unlock()
+			// Previous owner just left; wait for UnInitialize/Initialize instead of
+			// forcing the next client to race the async reset.
+			select {
+			case <-ctx.Done():
+				return status.FromContextError(ctx.Err()).Err()
+			case <-time.After(50 * time.Millisecond):
+			}
+		default:
+			s.session.mu.Unlock()
+			return rpcError(codes.FailedPrecondition, "SESSION_NOT_READY", op+": session is not ready")
+		}
 	}
-	if s.session.owner != nil && s.session.owner != connection {
-		return rpcError(codes.AlreadyExists, "CLIENT_ALREADY_ATTACHED", op+": DLL session already belongs to another connection")
-	}
-	s.session.owner = connection
-	s.session.activeRPCs++
-	return nil
 }
 
 // release keeps a disconnected owner reserved until its RPC handlers exit.

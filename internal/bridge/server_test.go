@@ -516,15 +516,24 @@ func TestOwnerResetWaitsForCleanupAndDiscardsOldEvents(t *testing.T) {
 	<-entered
 	s.receive(`<late/>`, nil)
 	other := context.WithValue(context.Background(), connectionKey{}, &connectionState{})
-	_, err = server.SendCommand(other, &pb.SendCommandRequest{Message: `<command id="server_status"/>`})
-	require.Equal(t, "SESSION_NOT_READY", errorReason(err))
+	request := &pb.SendCommandRequest{Message: `<command id="server_status"/>`}
+	claimed := make(chan error, 1)
+	go func() {
+		_, err := server.SendCommand(other, request)
+		claimed <- err
+	}()
+	select {
+	case err := <-claimed:
+		t.Fatalf("claim should wait while resetting, got %v", err)
+	case <-time.After(50 * time.Millisecond):
+	}
 	close(resume)
+	require.NoError(t, <-claimed, "claim succeeds once reset finishes")
 	require.Eventually(t, func() bool { return s.Snapshot().State == stateReady }, time.Second, time.Millisecond)
 	require.Zero(t, s.Snapshot().EventQueue)
 	require.Zero(t, s.Snapshot().EventBytes)
 	require.EqualValues(t, 2, c.starts.Load())
-	_, err = server.SendCommand(other, &pb.SendCommandRequest{Message: `<command id="server_status"/>`})
-	require.NoError(t, err)
+	require.True(t, s.Snapshot().ClientAttached)
 	// A repeated notification from the previous transport cannot release its successor.
 	server.HandleConn(ctx, &stats.ConnEnd{})
 	require.True(t, s.Snapshot().ClientAttached)
