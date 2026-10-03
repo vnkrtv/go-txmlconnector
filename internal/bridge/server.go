@@ -66,7 +66,14 @@ func (s *Server) releaseOwner(connection *connectionState) {
 	if s.session.owner != connection {
 		return
 	}
-	if s.session.state == stateReady {
+	switch s.session.state {
+	case stateReady:
+		s.session.state = stateResetting
+		s.session.metrics.ready.Set(0)
+	case stateFaulted:
+		// Cancel during an in-flight command can fault before ConnEnd/stream
+		// teardown. Recover so the disconnect still reinitializes the DLL.
+		s.session.recoverFromFaultLocked()
 		s.session.state = stateResetting
 		s.session.metrics.ready.Set(0)
 	}
@@ -88,25 +95,41 @@ func (s *Server) claim(ctx context.Context) error {
 		switch s.session.state {
 		case stateReady:
 			if s.session.owner != nil && s.session.owner != connection {
+				if !s.session.owner.closed.Load() {
+					s.session.mu.Unlock()
+					return rpcError(codes.AlreadyExists, "CLIENT_ALREADY_ATTACHED", op+": DLL session already belongs to another connection")
+				}
+				// Dead owner still listed — force a reset before handing out the DLL.
+				s.session.state = stateResetting
+				s.session.metrics.ready.Set(0)
+				s.session.scheduleResetLocked()
 				s.session.mu.Unlock()
-				return rpcError(codes.AlreadyExists, "CLIENT_ALREADY_ATTACHED", op+": DLL session already belongs to another connection")
+			} else {
+				s.session.owner = connection
+				s.session.activeRPCs++
+				s.session.mu.Unlock()
+				return nil
 			}
-			s.session.owner = connection
-			s.session.activeRPCs++
+		case stateFaulted:
+			// A previous cancel/reset race left the process unusable; try to
+			// come back when a new client arrives instead of requiring a restart.
+			s.session.recoverFromFaultLocked()
+			s.session.state = stateResetting
+			s.session.owner = nil
+			s.session.resetQueued = false
+			s.session.metrics.ready.Set(0)
+			s.session.scheduleResetLocked()
 			s.session.mu.Unlock()
-			return nil
 		case stateResetting:
 			s.session.mu.Unlock()
-			// Previous owner just left; wait for UnInitialize/Initialize instead of
-			// forcing the next client to race the async reset.
-			select {
-			case <-ctx.Done():
-				return status.FromContextError(ctx.Err()).Err()
-			case <-time.After(50 * time.Millisecond):
-			}
 		default:
 			s.session.mu.Unlock()
 			return rpcError(codes.FailedPrecondition, "SESSION_NOT_READY", op+": session is not ready")
+		}
+		select {
+		case <-ctx.Done():
+			return status.FromContextError(ctx.Err()).Err()
+		case <-time.After(50 * time.Millisecond):
 		}
 	}
 }

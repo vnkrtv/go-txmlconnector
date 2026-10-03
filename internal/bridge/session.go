@@ -144,6 +144,17 @@ func (s *Session) scheduleResetLocked() {
 	}
 }
 
+// recoverFromFaultLocked re-opens the fault signal so a disconnect-driven reset
+// can bring the DLL back after a cancel race faulted the session.
+func (s *Session) recoverFromFaultLocked() {
+	select {
+	case <-s.fault:
+		s.fault = make(chan struct{})
+	default:
+	}
+	s.reason = ""
+}
+
 // resetOwner runs on the same executor as commands. UnInitialize ends the old
 // broker session and joins callbacks before its buffered events are discarded.
 func (s *Session) resetOwner() {
@@ -154,33 +165,54 @@ func (s *Session) resetOwner() {
 		return
 	}
 	slog.InfoContext(context.Background(), "client disconnected; resetting connector")
-	err := s.connector.Close()
-	s.nativeStarted = false
-	if err != nil {
+	var err error
+	for attempt := 1; attempt <= 3; attempt++ {
+		if s.nativeStarted {
+			err = s.connector.Close()
+			if err != nil {
+				slog.ErrorContext(context.Background(), "connector reset close failed",
+					slog.Int("attempt", attempt), slog.Any("err", err))
+				time.Sleep(time.Duration(attempt) * 100 * time.Millisecond)
+				continue
+			}
+			s.nativeStarted = false
+		}
+		s.mu.Lock()
+		for len(s.events) > 0 {
+			<-s.events
+		}
+		s.eventBytes = 0
+		s.metrics.brokerConnected.Set(-1)
+		s.mu.Unlock()
+		err = s.connector.Start(s.receive)
+		if err != nil {
+			slog.ErrorContext(context.Background(), "connector reset initialize failed",
+				slog.Int("attempt", attempt), slog.Any("err", err))
+			time.Sleep(time.Duration(attempt) * 100 * time.Millisecond)
+			continue
+		}
+		s.nativeStarted = true
+		s.mu.Lock()
+		if s.state == stateResetting {
+			s.owner = nil
+			s.resetQueued = false
+			s.state = stateReady
+			s.reason = ""
+			s.metrics.ready.Set(1)
+		}
+		s.mu.Unlock()
+		slog.InfoContext(context.Background(), "connector ready for next client")
+		return
+	}
+	s.mu.Lock()
+	s.owner = nil
+	s.resetQueued = false
+	s.mu.Unlock()
+	if err != nil && s.nativeStarted {
 		s.fail("reset_close_failed")
 		return
 	}
-	s.mu.Lock()
-	for len(s.events) > 0 {
-		<-s.events
-	}
-	s.eventBytes = 0
-	s.metrics.brokerConnected.Set(-1)
-	s.mu.Unlock()
-	if err = s.connector.Start(s.receive); err != nil {
-		s.fail("reset_initialize_failed")
-		return
-	}
-	s.nativeStarted = true
-	s.mu.Lock()
-	if s.state == stateResetting {
-		s.owner = nil
-		s.resetQueued = false
-		s.state = stateReady
-		s.metrics.ready.Set(1)
-	}
-	s.mu.Unlock()
-	slog.InfoContext(context.Background(), "connector ready for next client")
+	s.fail("reset_initialize_failed")
 }
 
 func (s *Session) execute(j *job) {
@@ -299,7 +331,17 @@ func (s *Session) abandon(j *job, code codes.Code, message string) (string, erro
 		j.phase = "canceled"
 		return "", rpcError(code, "COMMAND_NOT_DISPATCHED", message+"; command not dispatched")
 	}
-	s.fail("command_outcome_unknown")
+	// A dispatched command with unknown outcome normally faults the session.
+	// Owner teardown is different: releaseOwner marks the transport closed and
+	// will reinit the DLL. Faulting here races into a permanent faulted state
+	// that blocks every future client until the process restarts.
+	s.mu.Lock()
+	skipFault := s.state == stateResetting || s.state == stateStopping || s.state == stateFaulted ||
+		(s.owner != nil && s.owner.closed.Load())
+	s.mu.Unlock()
+	if !skipFault {
+		s.fail("command_outcome_unknown")
+	}
 	return "", rpcError(code, "COMMAND_OUTCOME_UNKNOWN", message+" after dispatch; outcome unknown; reconcile before restarting")
 }
 
@@ -348,10 +390,31 @@ func (s *Session) fail(reason string) {
 
 // Logging can block on stdout. Never do it on the DLL callback thread.
 func (s *Session) logFault() {
-	select {
-	case <-s.fault:
-		slog.ErrorContext(context.Background(), "connector session faulted", slog.String("reason", s.Snapshot().Reason))
-	case <-s.done:
+	for {
+		s.mu.Lock()
+		ch := s.fault
+		s.mu.Unlock()
+		select {
+		case <-ch:
+			if reason := s.Snapshot().Reason; reason != "" {
+				slog.ErrorContext(context.Background(), "connector session faulted", slog.String("reason", reason))
+			}
+			for {
+				select {
+				case <-s.done:
+					return
+				case <-time.After(100 * time.Millisecond):
+				}
+				s.mu.Lock()
+				replaced := s.fault != ch
+				s.mu.Unlock()
+				if replaced {
+					break
+				}
+			}
+		case <-s.done:
+			return
+		}
 	}
 }
 

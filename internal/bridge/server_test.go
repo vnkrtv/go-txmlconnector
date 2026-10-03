@@ -556,6 +556,46 @@ func TestOwnerResetFailureRemainsUnavailable(t *testing.T) {
 	server.HandleConn(ctx, &stats.ConnEnd{})
 	require.Eventually(t, func() bool { return s.Snapshot().Reason == "reset_initialize_failed" }, time.Second, time.Millisecond)
 	other := context.WithValue(context.Background(), connectionKey{}, &connectionState{})
-	_, err = server.SendCommand(other, &pb.SendCommandRequest{Message: `<command id="server_status"/>`})
-	require.Equal(t, "SESSION_NOT_READY", errorReason(err))
+	claimCtx, cancel := context.WithTimeout(other, 200*time.Millisecond)
+	defer cancel()
+	_, err = server.SendCommand(claimCtx, &pb.SendCommandRequest{Message: `<command id="server_status"/>`})
+	require.Error(t, err)
+	require.True(t, status.Code(err) == codes.DeadlineExceeded || errorReason(err) == "SESSION_NOT_READY",
+		"reset stays unavailable until initialize succeeds, got %v", err)
+	require.GreaterOrEqual(t, c.starts.Load(), int32(2), "new clients keep asking for a recovery reset")
+}
+
+func TestCancelDuringCommandDoesNotPermanentFault(t *testing.T) {
+	var startedOnce sync.Once
+	started, unblock := make(chan struct{}), make(chan struct{})
+	c := &testConnector{send: func(command string) (string, error) {
+		if strings.Contains(command, "neworder") {
+			startedOnce.Do(func() { close(started) })
+			<-unblock
+		}
+		return acceptedResultXML, nil
+	}}
+	s, _ := setup(t, c, DefaultConfig())
+	server := NewServer(s)
+	owner := &connectionState{}
+	ctx := context.WithValue(context.Background(), connectionKey{}, owner)
+
+	errCh := make(chan error, 1)
+	cmdCtx, cancel := context.WithCancel(ctx)
+	go func() {
+		_, err := server.SendCommand(cmdCtx, &pb.SendCommandRequest{Message: `<command id="neworder"/>`})
+		errCh <- err
+	}()
+	<-started
+	// Disconnect first (as daemons now do), then cancel the in-flight command.
+	server.HandleConn(ctx, &stats.ConnEnd{})
+	cancel()
+	require.Error(t, <-errCh)
+	close(unblock)
+	require.Eventually(t, func() bool { return s.Snapshot().State == stateReady }, time.Second, time.Millisecond)
+	require.Empty(t, s.Snapshot().Reason, "disconnect cancel must not leave a terminal fault")
+
+	successor := context.WithValue(context.Background(), connectionKey{}, &connectionState{})
+	_, err := server.SendCommand(successor, &pb.SendCommandRequest{Message: `<command id="server_status"/>`})
+	require.NoError(t, err)
 }

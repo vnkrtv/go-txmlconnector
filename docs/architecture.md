@@ -70,9 +70,13 @@ starting → ready → resetting → ready
 Broker connectivity is reported in `server_status` callbacks and does not itself
 change bridge readiness.
 
-A fault is terminal for the current process. Event loss, callback read/parse
-errors, native reset failures, or an unknown command outcome prevent further
-commands. Restarting creates a new session; it does not recover broker state.
+A fault is terminal for outcomes that corrupt session integrity (event loss,
+callback read/parse errors). An unknown command outcome from a still-attached
+client also faults the session. Cancel during owner disconnect does **not**:
+`releaseOwner` recovers and reinitializes the DLL so the next client can attach
+without restarting the process. Native reset close/initialize failures are
+retried a few times before the session faults; a later client may still trigger
+recovery.
 
 ## Command execution
 
